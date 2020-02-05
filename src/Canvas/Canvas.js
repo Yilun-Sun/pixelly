@@ -1,66 +1,50 @@
 import React from 'react';
 
-import styles from '../CSS/Button.module.css';
-
-// function outlinedRect(props) {
-//     const { ctx, x, y, width, height } = props;
-//     ctx.rect(x, y, width, height);
-//     ctx.stroke();
-// }
-
 function filledRect(props) {
     const { ctx, x, y, width, height, color } = props;
     ctx.fillStyle = color;
     ctx.fillRect(x, y, width, height);
 }
 
-function filledCircle(props) {
-    const { ctx, x, y, radius, color } = props;
-    ctx.beginPath();
-    ctx.arc(x, y, radius, 0, 2 * Math.PI, false);
-    ctx.fillStyle = color;
-    ctx.fill();
-    ctx.stroke();
-    ctx.closePath();
-}
-
-
 let width = 800;
 let height = 800;
 
-let nodeWidth = 20;
-let nodeHeight = 20;
+let nodeWidth = 10;
+let nodeHeight = 10;
 
 let prevX = 0;
 let prevY = 0;
 
-let symmetry = 6;
-let angle = 360 / symmetry;
 // let saveButton;
 // let clearButton;
 // let slider;
 // let xoff = 0;
 
 let nodes = [];
-let rows = 40;
-let columns = 30;
+let rows = 80;
+let columns = 80;
 
-let padding = 1;
-let currentColor = "#A96360";
+// let padding = 2;
+let currentColor = "#000000";
 let nodeColor = "#6699A1";
+const backgroundColor_1 = "#FFFEFD";
+const backgroundColor_2 = "#CCCBCA";    // or bdc3c7
+
+var ToolEnum = {
+    PENCIL: 1,
+    ERASER: 2,
+    BUCKET: 3,
+    properties: {
+        1: { name: "PENCIL", value: 1, size: 1 },
+        2: { name: "ERASER", value: 2, size: 1 },
+        3: { name: "BUCKET", value: 3, size: 1 }
+    }
+};
+
+var currentTool = ToolEnum.PENCIL;
 
 var canvasElementOffsetLeft;
 var canvasElementOffsetTop;
-
-function randomSquareDistribution() {
-
-    let u = Math.random() * 2 - 1.0;
-
-    if (u >= 0)
-        return u * u;
-    else
-        return - u * u;
-}
 
 function createNode(x, y, nodeWidth, nodeHeight, ctx) {
     var object = new Object();
@@ -71,7 +55,8 @@ function createNode(x, y, nodeWidth, nodeHeight, ctx) {
     object.ctx = ctx;
     object.color = nodeColor;
 
-    object.hasPadding = true;
+    // object.hasPadding = true;
+    object.hasBackground = true;
 
     // let isFinished = false;
 
@@ -81,10 +66,13 @@ function createNode(x, y, nodeWidth, nodeHeight, ctx) {
     }
 
     object.show = function () {
-        if (this.hasPadding) {
+        if (this.hasBackground) {
+            const row_of_node = this.x / this.nodeWidth;
+            const column_of_node = this.y / this.nodeHeight;
+
             filledRect({
-                ctx: this.ctx, x: this.x + padding / 2, y: this.y + padding / 2,
-                width: this.nodeWidth - padding, height: this.nodeHeight - padding, color: this.color
+                ctx: this.ctx, x: this.x, y: this.y,
+                width: this.nodeWidth, height: this.nodeHeight, color: (row_of_node + column_of_node) % 2 === 0 ? backgroundColor_1 : backgroundColor_2
             });
         }
         else {
@@ -101,6 +89,9 @@ function createNode(x, y, nodeWidth, nodeHeight, ctx) {
 
     object.setPadding = function (hasPadding) {
         this.hasPadding = hasPadding;
+    }
+    object.setBackground = function (hasBackground) {
+        this.hasBackground = hasBackground;
     }
 
     return object;
@@ -137,9 +128,18 @@ function showNodes() {
 function resetNodes() {
     for (let i = 0; i < rows; i++) {
         for (let j = 0; j < columns; j++) {
-            nodes[i][j].setColor(nodeColor);
+            nodes[i][j].setBackground(true);
         }
     }
+}
+
+function paint(x_of_node, y_of_node, color) {
+    const column_under = Math.floor(x_of_node / nodeWidth);
+    const row_under = Math.floor(y_of_node / nodeHeight);
+    nodes[row_under][column_under].setColor(color);
+    
+    nodes[row_under][column_under].setBackground(currentTool != ToolEnum.PENCIL);
+    nodes[row_under][column_under].show();
 }
 
 class Canvas extends React.Component {
@@ -151,7 +151,7 @@ class Canvas extends React.Component {
 
     componentDidMount() {
         this.updateCanvas();
-        // this.drawCoordinateLine();
+
         initNodes();
         showNodes();
 
@@ -165,21 +165,11 @@ class Canvas extends React.Component {
     }
     updateCanvas() {
         const ctx = this.refs.canvas.getContext('2d');
-        // ctx.translate(width / 2, height / 2);
         ctx.clearRect(0, 0, 800, 800);
         filledRect({
             ctx: ctx, x: 0, y: 0, width: width, height: height, color: "#FFFFFF"
         });
-
-        // for (let i = 0; i < 20; i++) {
-        //     for (let j = 0; j < 20; j++) {
-        //         var node = createNode(j * 10, i * 10, 10, 10, ctx);
-        //         node.show();
-        //     }
-        // }
     }
-
-
 
     handleMouseDown = (event) => {
         console.log('mouse down');
@@ -201,13 +191,8 @@ class Canvas extends React.Component {
         }
 
         if (this.isMouseDown) {
-            const column_under = Math.floor(prevX / nodeWidth);
-            const row_under = Math.floor(prevY / nodeHeight);
-            nodes[row_under][column_under].setColor(currentColor);
-            console.log(row_under + ' ' + column_under);
-            showNodes();
+            paint(prevX, prevY, currentColor);
         }
-
     }
 
     handleMouseUp = (event) => {
@@ -217,27 +202,28 @@ class Canvas extends React.Component {
     }
 
     handleMouseMove = (event) => {
-        // var x = event.clientX - width / 2;
-        // var y = event.clientY - height / 2;
-
         var x = event.pageX - canvasElementOffsetLeft;
         var y = event.pageY - canvasElementOffsetTop;
-
+        var coordinatesTextElement = document.getElementById("coordinatesText");
+        coordinatesTextElement.innerHTML = 'x: ' + x + ' y: ' + y;
 
 
         if (x > columns * nodeWidth - 1 || x < 1 || y > rows * nodeHeight - 1 || y < 1) {
             this.isMouseDown = false;
         }
 
-        const ctx = this.refs.canvas.getContext('2d');
         if (this.isMouseDown) {
-
-            const column_under = Math.floor(x / nodeWidth);
-            const row_under = Math.floor(y / nodeHeight);
-            nodes[row_under][column_under].setColor(currentColor);
-            console.log(row_under + ' ' + column_under);
-            showNodes();
-
+            const distance_x = x - prevX;
+            const distance_y = y - prevY;
+            const steps = Math.max(Math.floor(Math.abs(distance_x)), Math.floor(Math.abs(distance_y)));
+            if (steps === 0) {
+                paint(x, y, currentColor);
+            }
+            else {
+                for (let index = 0; index <= steps; index++) {
+                    paint((prevX + distance_x * index / steps), (prevY + distance_y * index / steps), currentColor);
+                }
+            }
             prevX = x;
             prevY = y;
         }
@@ -251,20 +237,58 @@ class Canvas extends React.Component {
 
     }
 
+    toggleGrid() {
+        if (nodes[0][0].hasPadding === true) {
+            for (let i = 0; i < rows; i++) {
+                for (let j = 0; j < columns; j++) {
+                    nodes[i][j].setPadding(false);
+                }
+            }
+        }
+        else {
+            for (let i = 0; i < rows; i++) {
+                for (let j = 0; j < columns; j++) {
+                    nodes[i][j].setPadding(true);
+                }
+            }
+        }
+        showNodes();
+
+    }
+
+    changeTool() {
+        var toolSelectorElement = document.getElementById("toolSelector");
+
+        
+
+        if (currentTool === ToolEnum.PENCIL) {
+            toolSelectorElement.innerHTML = ToolEnum.properties[ToolEnum.ERASER].name;
+            currentTool = ToolEnum.ERASER;
+        }
+        else {
+            toolSelectorElement.innerHTML = ToolEnum.properties[ToolEnum.PENCIL].name;
+            currentTool = ToolEnum.PENCIL;
+        }
+        console.log('tool change to: ' + ToolEnum.properties[currentTool].name);
+    }
+
     render() {
         const clearButtonStyle = {
-            // border: 0,
-            // borderRadius: '5px',
-            // backgroundColor: '#FFFFFF',
             width: '270px',
             height: '60px',
             fontSize: '20px'
+        };
+        const textStyle = {
+            fontSize: '14px'
         };
 
         return (
             <React.Fragment>
                 <canvas id='canvas' onMouseUp={this.handleMouseUp} onMouseDown={this.handleMouseDown} onMouseMove={this.handleMouseMove} ref="canvas" width={width} height={height} />
                 <button onClick={this.clearCanvas} class="btn btn--stripe" style={clearButtonStyle}>Clear Canvas</button>
+                {/* <button onClick={this.toggleGrid} class="btn btn--stripe" style={clearButtonStyle}>Toggle Grid</button> */}
+                <button id='toolSelector' onClick={this.changeTool} class="btn btn--stripe" style={clearButtonStyle}>PENCIL</button>
+                <text id='coordinatesText' style={textStyle}>x: y:</text>
             </React.Fragment>
         );
     }
